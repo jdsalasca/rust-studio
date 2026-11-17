@@ -1,0 +1,9 @@
+[package]
+name = "photo_studio"
+version = "0.2.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.6.8", features = ["derive"] }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+jpeg-encoder = "0.7.1"
