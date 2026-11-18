@@ -45,9 +45,9 @@ intenta "hacerla más linda". Prepara dos archivos:
 - `_face.jpg`: la cara a 1024×1024, con la cara al ~75 % del cuadro, para que el
   modelo tenga más evidencia de identidad.
 
-La cara pasa de ~30 % del ancho a ~75 %. En la foto completa, el modelo ve la
-cara a ~540 px; en el recorte, a ~760 px cuando reescala a 1024. No es magia: es
-darle al modelo menos fondo y más cara.
+La cara pasa de ~30 % del ancho a ~75 %. Si el modelo reescala el lado corto de
+la foto a 1024, la cara queda en ~540 px; en el recorte, en ~760 px. No es magia:
+es darle al modelo menos fondo y más cara.
 
 ## La lógica del pipeline
 
