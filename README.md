@@ -93,8 +93,9 @@ Por eso la cara cambia. El resumen de la evidencia y las citas está en
 
 Lo que más ayuda, en orden:
 
-1. **Recorte de cara** `_face.jpg` como referencia de identidad (más píxeles de
-   cara que en la foto completa).
+1. **Recorte de cara** `_face.jpg` como referencia de identidad: la cara pasa de
+   ~30 % del ancho a ~75 %, y de ~540 px a ~760 px cuando el modelo reescala a
+   1024.
 2. **Máscara** si el cambio es de fondo: la máscara pesa más que el prompt.
 3. **Una sola edición por pasada** y fuerza baja.
 4. **Prompt con invariantes explícitos** (`prompts/gemini.txt`).
