@@ -8,6 +8,8 @@ con más píxeles de identidad.
 El binario se llama `photo_studio`. No usa GAN, difusión ni *face restoration*:
 no inventa rasgos.
 
+> El porqué del proyecto, en una página: [`MANIFESTO.md`](MANIFESTO.md).
+
 ## Instalación
 
 ```powershell
