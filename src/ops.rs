@@ -2,6 +2,7 @@
 
 use image::RgbImage;
 
+use crate::deconv;
 use crate::guided;
 use crate::plan::{Plan, tone_at, tone_table};
 use crate::stats::luma;
@@ -140,10 +141,18 @@ pub fn apply(img: &RgbImage, plan: &Plan) -> Result<RgbImage, String> {
     let mut out =
         RgbImage::from_raw(w, h, buf).ok_or_else(|| "búfer de imagen inválido".to_string())?;
 
-    // 3. Denoise bilateral suave sobre luminancia, antes del microcontraste.
+    // 3. Denoise bilateral suave y deconvolución sobre luminancia.
     let y0 = luma_vec(&out);
     let y1 = bilateral(&y0, wu, hu);
-    scale_by_luma(&mut out, &y0, &y1);
+    let y2 = deconv::richardson_lucy(&y1, wu, hu, plan.deconv_iters);
+    // El RL amplifica altas frecuencias; un segundo bilateral elimina el grano
+    // que no forma borde sin borrar el detalle recuperado.
+    let y2 = if plan.deconv_iters > 0 {
+        bilateral(&y2, wu, hu)
+    } else {
+        y2
+    };
+    scale_by_luma(&mut out, &y0, &y2);
 
     // 4. Base/detalle con filtro guiado + CLAHE en la base (sin amplificar ruido).
     if plan.clahe_blend > 0.0 || plan.detail_gain > 0.0 {
@@ -272,6 +281,7 @@ mod tests {
             s_curve: 0.1,
             vibrance: 0.3,
             sharpen: 0.2,
+            deconv_iters: 4,
             base_radius: 6,
             base_eps: 0.01,
             clahe_clip: 2.0,

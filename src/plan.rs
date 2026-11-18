@@ -21,6 +21,8 @@ pub struct Plan {
     pub vibrance: f32,
     /// Afilado final.
     pub sharpen: f32,
+    /// Iteraciones de Richardson-Lucy (0 = sin deconvolución).
+    pub deconv_iters: u32,
     /// Radio del filtro guiado que separa iluminación de detalle.
     pub base_radius: usize,
     /// Regularización del filtro guiado.
@@ -38,7 +40,7 @@ pub struct Plan {
 }
 
 /// Calcula los ajustes. `strength` va de 0 a 1,5 y `long_side` es el lado largo de salida.
-pub fn plan(stats: &Stats, strength: f32, long_side: u32) -> Plan {
+pub fn plan(stats: &Stats, strength: f32, long_side: u32, deconv_iters: u32) -> Plan {
     let s = strength.clamp(0.0, 1.5);
 
     // Gris-mundo parcial: corrige como mucho ±4 % y no toca el brillo.
@@ -65,12 +67,13 @@ pub fn plan(stats: &Stats, strength: f32, long_side: u32) -> Plan {
         gamma,
         s_curve: 0.10 * s,
         vibrance: 0.50 * s,
-        sharpen: 0.22 * s,
+        sharpen: if deconv_iters > 0 { 0.10 * s } else { 0.22 * s },
+        deconv_iters,
         base_radius: ((long_side / 40) as usize).max(8),
         base_eps: 0.01,
         clahe_clip: 2.0,
         clahe_blend: 0.35 * s,
-        detail_gain: 0.45 * s,
+        detail_gain: 0.35 * s,
         chroma_radius: 4,
         chroma_blend: 0.55 * s,
     }
@@ -116,13 +119,13 @@ mod tests {
 
     #[test]
     fn gamma_es_razonable() {
-        let p = plan(&sample_stats(), 1.0, 4608);
+        let p = plan(&sample_stats(), 1.0, 4608, 4);
         assert!(p.gamma >= 0.8 && p.gamma <= 1.3, "gamma {}", p.gamma);
     }
 
     #[test]
     fn wb_conservador() {
-        let p = plan(&sample_stats(), 1.0, 4608);
+        let p = plan(&sample_stats(), 1.0, 4608, 4);
         for g in p.wb {
             assert!((0.95..=1.05).contains(&g), "ganancia {}", g);
         }
@@ -130,7 +133,7 @@ mod tests {
 
     #[test]
     fn curva_tonal_monotona() {
-        let p = plan(&sample_stats(), 1.0, 4608);
+        let p = plan(&sample_stats(), 1.0, 4608, 4);
         let t = tone_table(&p);
         for i in 1..t.len() {
             assert!(t[i] >= t[i - 1] - 1e-6, "baja en {}", i);
@@ -143,7 +146,7 @@ mod tests {
     fn gamma_sube_medianas() {
         let mut s = sample_stats();
         s.center_median = 0.30;
-        let p = plan(&s, 1.0, 4608);
+        let p = plan(&s, 1.0, 4608, 4);
         let t = tone_table(&p);
         let v = tone_at(&t, 0.30);
         assert!(v > 0.33, "0.30 quedó en {}", v);

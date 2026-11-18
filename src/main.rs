@@ -14,6 +14,8 @@ use std::time::Instant;
 
 use clap::Parser;
 
+mod deconv;
+mod face;
 mod guided;
 mod ops;
 mod plan;
@@ -42,9 +44,17 @@ struct Args {
     #[arg(long, default_value_t = 1.0)]
     strength: f32,
 
+    /// Iteraciones de deconvolución Richardson-Lucy (0 = desactivar).
+    #[arg(long, default_value_t = 3)]
+    deconv: u32,
+
     /// Solo medir y mostrar el diagnóstico, sin escribir archivos.
     #[arg(long)]
     dry_run: bool,
+
+    /// No generar el recorte de cara para la IA.
+    #[arg(long)]
+    no_face_crop: bool,
 }
 
 fn is_image(path: &Path) -> bool {
@@ -85,7 +95,7 @@ fn process(path: &Path, args: &Args) -> Result<(), Box<dyn Error>> {
         .to_rgb8();
     let (w, h) = img.dimensions();
     let measured = stats::analyze(&img);
-    let settings = plan::plan(&measured, args.strength, w.max(h));
+    let settings = plan::plan(&measured, args.strength, w.max(h), args.deconv);
 
     println!(
         "{:<34} {:>4}x{:<4}  Y={:>3}  sat={:>3}  nit={:>5.2}  ruido={:>4.2}  ->  wb {:.2}/{:.2}/{:.2}  g={:.2}",
@@ -106,23 +116,45 @@ fn process(path: &Path, args: &Args) -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let mut out = ops::apply(&img, &settings)?;
-    out = ops::resize_long_side(&out, args.long_side);
-    ops::sharpen(&mut out, settings.sharpen);
-
+    let enhanced = ops::apply(&img, &settings)?;
     std::fs::create_dir_all(&args.out)?;
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+
+    if !args.no_face_crop {
+        if let Some(f) = face::detect(&enhanced) {
+            let mut cut = face::crop(&enhanced, &f, 1024);
+            ops::sharpen(&mut cut, 0.15);
+            let face_dest = args.out.join(format!("{stem}_face.jpg"));
+            save_jpeg(&cut, &face_dest)?;
+            println!("    cara {}x{} px -> {}", f.w, f.h, face_dest.display());
+        } else {
+            println!("    sin cara detectada");
+        }
+    }
+
+    let mut out = ops::resize_long_side(&enhanced, args.long_side);
+    ops::sharpen(&mut out, settings.sharpen);
     let dest = args.out.join(format!("{stem}_studio.jpg"));
-    let (ow, oh) = out.dimensions();
-    let mut encoder = jpeg_encoder::Encoder::new_file(&dest, 95)?;
+    save_jpeg(&out, &dest)?;
+    println!(
+        "    -> {} ({}x{})",
+        dest.display(),
+        out.width(),
+        out.height()
+    );
+    Ok(())
+}
+
+fn save_jpeg(img: &image::RgbImage, dest: &Path) -> Result<(), Box<dyn Error>> {
+    let (w, h) = img.dimensions();
+    let mut encoder = jpeg_encoder::Encoder::new_file(dest, 95)?;
     encoder.set_sampling_factor(jpeg_encoder::SamplingFactor::R_4_4_4);
     encoder.encode(
-        out.as_raw(),
-        ow as u16,
-        oh as u16,
+        img.as_raw(),
+        w as u16,
+        h as u16,
         jpeg_encoder::ColorType::Rgb,
     )?;
-    println!("    -> {} ({}x{})", dest.display(), ow, oh);
     Ok(())
 }
 
